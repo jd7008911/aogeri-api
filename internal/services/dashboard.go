@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jd7008911/aogeri-api/internal/auth"
 	"github.com/jd7008911/aogeri-api/internal/db"
 	"github.com/jd7008911/aogeri-api/internal/models"
@@ -85,7 +86,79 @@ func (d *DashboardService) GetStats(ctx context.Context) (models.DashboardStats,
 
 // GetUserOverview returns a minimal overview for now.
 func (d *DashboardService) GetUserOverview(ctx context.Context, userID uuid.UUID) (any, error) {
-	return map[string]any{"overview": "none"}, nil
+	// Convert uuid.UUID -> pgtype.UUID
+	var uid pgtype.UUID
+	copy(uid.Bytes[:], userID[:])
+	uid.Valid = true
+
+	// Profile (optional)
+	profile, err := d.queries.GetUserProfile(ctx, uid)
+	var prof map[string]any
+	if err == nil {
+		prof = map[string]any{
+			"username":   profile.Username.String,
+			"full_name":  profile.FullName.String,
+			"avatar_url": profile.AvatarUrl.String,
+			"country":    profile.Country.String,
+			"timezone":   profile.Timezone.String,
+		}
+	} else {
+		prof = map[string]any{}
+	}
+
+	// Stakes
+	stakes, err := d.queries.GetUserStakes(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+
+	totalStaked := 0.0
+	totalRewards := 0.0
+	recent := make([]map[string]any, 0, len(stakes))
+	for i, s := range stakes {
+		amt := 0.0
+		if s.Amount.Valid {
+			if fv, err := s.Amount.Float64Value(); err == nil {
+				amt = fv.Float64
+			}
+		}
+		rewards := 0.0
+		if s.RewardsClaimed.Valid {
+			if rv, err := s.RewardsClaimed.Float64Value(); err == nil {
+				rewards = rv.Float64
+			}
+		}
+		totalStaked += amt
+		totalRewards += rewards
+
+		// include up to 5 most recent
+		if i < 5 {
+			apy := 0.0
+			if s.Apy.Valid {
+				if fv, err := s.Apy.Float64Value(); err == nil {
+					apy = fv.Float64
+				}
+			}
+			recent = append(recent, map[string]any{
+				"id":           s.ID,
+				"token_symbol": s.Symbol,
+				"amount":       fmt.Sprintf("%f", amt),
+				"apy":          apy,
+				"start_date":   s.StartDate.Time,
+				"status":       s.Status.String,
+			})
+		}
+	}
+
+	overview := map[string]any{
+		"profile":               prof,
+		"active_stakes_count":   len(stakes),
+		"total_staked":          strconv.FormatFloat(totalStaked, 'f', -1, 64),
+		"total_rewards_claimed": strconv.FormatFloat(totalRewards, 'f', -1, 64),
+		"recent_stakes":         recent,
+	}
+
+	return overview, nil
 }
 
 // GetSecurityStatus returns a minimal security status.
