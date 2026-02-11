@@ -18,7 +18,8 @@ jobs:
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
-          path: ~~/go/pkg/mod
+          # use the runner home Go module cache directory (single ~)
+          path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
