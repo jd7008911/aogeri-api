@@ -4,10 +4,12 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jd7008911/aogeri-api/internal/auth"
 	"github.com/jd7008911/aogeri-api/internal/db"
 	"github.com/jd7008911/aogeri-api/internal/models"
@@ -141,7 +143,71 @@ func (h *StakeHandler) Unstake(w http.ResponseWriter, r *http.Request) {
 
 // ClaimRewards placeholder
 func (h *StakeHandler) ClaimRewards(w http.ResponseWriter, r *http.Request) {
-	web.Error(w, http.StatusNotImplemented, "not implemented")
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		web.Error(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	stakeIDStr := chi.URLParam(r, "id")
+	stakeID, err := uuid.Parse(stakeIDStr)
+	if err != nil {
+		web.Error(w, http.StatusBadRequest, "Invalid stake ID")
+		return
+	}
+
+	// Verify stake exists and ownership
+	stake, err := h.stakeService.GetStakeByID(r.Context(), stakeID)
+	if err != nil {
+		web.Error(w, http.StatusNotFound, "Stake not found")
+		return
+	}
+	if stake.UserID != userID {
+		web.Error(w, http.StatusForbidden, "Access denied")
+		return
+	}
+
+	// Calculate rewards
+	rewardsStr, err := h.stakeService.CalculateRewards(r.Context(), stakeID)
+	if err != nil {
+		web.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// If zero, nothing to claim
+	if rewardsStr == "0" {
+		web.Respond(w, http.StatusOK, map[string]any{"claimed": "0"})
+		return
+	}
+
+	// Convert stakeID -> pgtype.UUID
+	var idPg pgtype.UUID
+	copy(idPg.Bytes[:], stakeID[:])
+	idPg.Valid = true
+
+	// Convert rewards string -> pgtype.Numeric
+	var rn pgtype.Numeric
+	if err := rn.Scan(rewardsStr); err != nil {
+		web.Error(w, http.StatusInternalServerError, "invalid rewards value")
+		return
+	}
+
+	// Update DB (increment rewards_claimed)
+	if err := h.queries.UpdateStakeRewards(r.Context(), db.UpdateStakeRewardsParams{
+		ID:             idPg,
+		RewardsClaimed: rn,
+	}); err != nil {
+		web.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Return the claimed amount as number string
+	if _, err := strconv.ParseFloat(rewardsStr, 64); err != nil {
+		web.Respond(w, http.StatusOK, map[string]any{"claimed": rewardsStr})
+		return
+	}
+
+	web.Respond(w, http.StatusOK, map[string]any{"claimed": rewardsStr})
 }
 
 // GetStakingStats placeholder
