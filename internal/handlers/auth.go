@@ -2,9 +2,10 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
-
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,6 +16,7 @@ import (
 	"github.com/jd7008911/aogeri-api/internal/db"
 	"github.com/jd7008911/aogeri-api/internal/models"
 	"github.com/jd7008911/aogeri-api/pkg/web"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthHandler struct {
@@ -32,18 +34,21 @@ func NewAuthHandler(authService *auth.AuthService, queries *db.Queries) *AuthHan
 }
 
 func (h *AuthHandler) RegisterRoutes(r chi.Router) {
-	r.Post("/register", h.Register)
-	r.Post("/login", h.Login)
-	r.Post("/refresh", h.RefreshToken)
-	r.Post("/logout", h.Logout)
+	// Public/auth routes are namespaced under /auth
+	r.Route("/auth", func(r chi.Router) {
+		r.Post("/register", h.Register)
+		r.Post("/login", h.Login)
+		r.Post("/refresh", h.RefreshToken)
+		r.Post("/logout", h.Logout)
 
-	// Protected routes
-	r.Group(func(r chi.Router) {
-		r.Use(h.authService.AuthMiddleware)
-		r.Get("/profile", h.GetProfile)
-		r.Put("/profile", h.UpdateProfile)
-		r.Post("/change-password", h.ChangePassword)
-		r.Post("/enable-2fa", h.Enable2FA)
+		// Protected routes under /auth
+		r.Group(func(r chi.Router) {
+			r.Use(h.authService.AuthMiddleware)
+			r.Get("/profile", h.GetProfile)
+			r.Put("/profile", h.UpdateProfile)
+			r.Post("/change-password", h.ChangePassword)
+			r.Post("/enable-2fa", h.Enable2FA)
+		})
 	})
 }
 
@@ -225,15 +230,142 @@ func (h *AuthHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 
 // UpdateProfile is a placeholder until full profile update is implemented.
 func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
-	web.Error(w, http.StatusNotImplemented, "not implemented")
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		web.Error(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	var req struct {
+		Username  string `json:"username"`
+		FullName  string `json:"full_name"`
+		AvatarUrl string `json:"avatar_url"`
+		Country   string `json:"country"`
+		Timezone  string `json:"timezone"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	var pgid pgtype.UUID
+	copy(pgid.Bytes[:], userID[:])
+	pgid.Valid = true
+
+	toText := func(s string) pgtype.Text {
+		if s == "" {
+			return pgtype.Text{Valid: false}
+		}
+		return pgtype.Text{String: s, Valid: true}
+	}
+
+	if err := h.queries.UpdateUserProfile(r.Context(), db.UpdateUserProfileParams{
+		UserID:    pgid,
+		Username:  toText(req.Username),
+		FullName:  toText(req.FullName),
+		AvatarUrl: toText(req.AvatarUrl),
+		Country:   toText(req.Country),
+		Timezone:  toText(req.Timezone),
+	}); err != nil {
+		web.Error(w, http.StatusInternalServerError, "Failed to update profile")
+		return
+	}
+
+	// Return updated profile
+	profile, err := h.queries.GetUserProfile(r.Context(), pgid)
+	if err != nil {
+		web.Error(w, http.StatusInternalServerError, "Failed to fetch updated profile")
+		return
+	}
+
+	web.Respond(w, http.StatusOK, profile)
 }
 
-// ChangePassword is a placeholder until implemented.
+// ChangePassword changes the authenticated user's password after verifying the old password.
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
-	web.Error(w, http.StatusNotImplemented, "not implemented")
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		web.Error(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := auth.ValidatePasswordStrength(req.NewPassword); err != nil {
+		web.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var pgid pgtype.UUID
+	copy(pgid.Bytes[:], userID[:])
+	pgid.Valid = true
+
+	user, err := h.queries.GetUserByID(r.Context(), pgid)
+	if err != nil {
+		web.Error(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	// verify old password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.OldPassword)); err != nil {
+		web.Error(w, http.StatusUnauthorized, "invalid current password")
+		return
+	}
+
+	// hash new password
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		web.Error(w, http.StatusInternalServerError, "failed to hash password")
+		return
+	}
+
+	if err := h.queries.UpdateUserPassword(r.Context(), db.UpdateUserPasswordParams{
+		ID:           pgid,
+		PasswordHash: string(hashed),
+	}); err != nil {
+		web.Error(w, http.StatusInternalServerError, "failed to update password")
+		return
+	}
+
+	web.Respond(w, http.StatusOK, map[string]string{"message": "password changed"})
 }
 
-// Enable2FA is a placeholder until implemented.
+// Enable2FA generates a 2FA secret for the user and enables 2FA.
 func (h *AuthHandler) Enable2FA(w http.ResponseWriter, r *http.Request) {
-	web.Error(w, http.StatusNotImplemented, "not implemented")
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		web.Error(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	// generate random secret token (hex)
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		web.Error(w, http.StatusInternalServerError, "failed to generate secret")
+		return
+	}
+	secret := hex.EncodeToString(b)
+
+	var pgid pgtype.UUID
+	copy(pgid.Bytes[:], userID[:])
+	pgid.Valid = true
+
+	if err := h.queries.UpdateUser2FA(r.Context(), db.UpdateUser2FAParams{
+		ID:               pgid,
+		TwoFactorSecret:  pgtype.Text{String: secret, Valid: true},
+		TwoFactorEnabled: pgtype.Bool{Bool: true, Valid: true},
+	}); err != nil {
+		web.Error(w, http.StatusInternalServerError, "failed to enable 2fa")
+		return
+	}
+
+	web.Respond(w, http.StatusOK, map[string]string{"two_factor_secret": secret})
 }
