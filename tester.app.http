@@ -3,7 +3,7 @@
 @TOKEN= eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMmM1MDQwZmMtNzcxZS00NWFiLWFhMmItMWViNDkwYzBlOWYzIiwiZW1haWwiOiJqZDcwMDg5MTFAZ21haWwuY29tIiwiaXNzIjoiYW9nZXJpLWFwaSIsImV4cCI6MTc3MDgwMTI5MCwiaWF0IjoxNzcwODAwMzkwfQ.WL3wHh-aQpOWDZZDtIoR_Z3Vad05RKNIpQGAsab1mY4
 @REFRESH_TOKEN= d3ff9e0c8fc418bdb9e9ecedbe37a4a7a715d50897963b17133858a0945aaa41
 ### Register a new user
-POST {{BASE}}/api/v1/register
+POST {{BASE}}/api/v1/auth/register
 Content-Type: application/json
 
 {
@@ -14,7 +14,7 @@ Content-Type: application/json
 }
 
 ### Login to get access token
-POST {{BASE}}/api/v1/login
+POST {{BASE}}/api/v1/auth/login
 Content-Type: application/json
 
 {
@@ -23,7 +23,7 @@ Content-Type: application/json
 }
 
 ### Example: use the returned access token for protected endpoints
-# Replace {{TOKEN}} with the `access_token` value returned by /login
+# Replace {{TOKEN}} with the `access_token` value returned by /auth/login
 
 ### Create a stake
 POST {{BASE}}/api/v1/stakes
@@ -39,7 +39,7 @@ Content-Type: application/json
 
 
 ### 1) Register (create a user)
-POST {{BASE}}/api/v1/register
+POST {{BASE}}/api/v1/auth/register
 Content-Type: application/json
 
 {
@@ -50,7 +50,7 @@ Content-Type: application/json
 }
 
 ### 2) Login (returns access_token + refresh_token)
-POST {{BASE}}/api/v1/login
+POST {{BASE}}/api/v1/auth/login
 Content-Type: application/json
 
 {
@@ -59,8 +59,8 @@ Content-Type: application/json
 }
 
 # Example: extract token with `jq` (bash)
-# TOKEN=$(curl -s -X POST {{BASE}}/api/v1/login -H 'Content-Type: application/json' -d '{"email":"jd7008911@gmail.com","password":"P@$$w0rd1!"}' | jq -r '.access_token')
-# REFRESH=$(curl -s -X POST {{BASE}}/api/v1/login -H 'Content-Type: application/json' -d '{"email":"jd7008911@gmail.com","password":"P@$$w0rd1!"}' | jq -r '.refresh_token')
+# TOKEN=$(curl -s -X POST {{BASE}}/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"jd7008911@gmail.com","password":"P@$$w0rd1!"}' | jq -r '.access_token')
+# REFRESH=$(curl -s -X POST {{BASE}}/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"jd7008911@gmail.com","password":"P@$$w0rd1!"}' | jq -r '.refresh_token')
 
 ### 3) Create a stake (authenticated)
 POST {{BASE}}/api/v1/stakes
@@ -111,7 +111,7 @@ GET {{BASE}}/api/v1/proposals
 Authorization: Bearer {{TOKEN}}
 
 ### Refresh token
-POST {{BASE}}/api/v1/refresh
+POST {{BASE}}/api/v1/auth/refresh
 Content-Type: application/json
 
 {
@@ -119,7 +119,7 @@ Content-Type: application/json
 }
 
 ### Logout (invalidate refresh token)
-POST {{BASE}}/api/v1/logout
+POST {{BASE}}/api/v1/auth/logout
 Content-Type: application/json
 
 {
