@@ -163,5 +163,65 @@ func (d *DashboardService) GetUserOverview(ctx context.Context, userID uuid.UUID
 
 // GetSecurityStatus returns a minimal security status.
 func (d *DashboardService) GetSecurityStatus(ctx context.Context) (any, error) {
-	return map[string]any{"status": "ok"}, nil
+	// If request is authenticated, include per-user security details
+	if u, ok := auth.GetUserFromContext(ctx); ok {
+		twoFA := false
+		if u.TwoFactorEnabled.Valid {
+			twoFA = u.TwoFactorEnabled.Bool
+		}
+		var failed int32
+		if u.FailedLoginAttempts.Valid {
+			failed = u.FailedLoginAttempts.Int32
+		}
+		locked := false
+		lockedUntil := ""
+		if u.LockedUntil.Valid {
+			locked = true
+			lockedUntil = u.LockedUntil.Time.String()
+		}
+		lastLogin := ""
+		if u.LastLogin.Valid {
+			lastLogin = u.LastLogin.Time.String()
+		}
+
+		// Simple scoring: start at 100, penalize for missing 2FA and failed attempts
+		score := 100.0
+		recommendations := []string{}
+		if !twoFA {
+			score -= 40.0
+			recommendations = append(recommendations, "Enable two-factor authentication")
+		}
+		if failed > 0 {
+			penalty := float64(failed) * 2.5
+			if penalty > 30 {
+				penalty = 30
+			}
+			score -= penalty
+			recommendations = append(recommendations, "Review recent failed login attempts")
+		}
+		if locked {
+			recommendations = append(recommendations, "Account locked — follow unlock procedures")
+		}
+		if score < 0 {
+			score = 0
+		}
+
+		return map[string]any{
+			"status":                "ok",
+			"security_score":        score,
+			"two_factor_enabled":    twoFA,
+			"failed_login_attempts": failed,
+			"locked":                locked,
+			"locked_until":          lockedUntil,
+			"last_login":            lastLogin,
+			"recommendations":       recommendations,
+		}, nil
+	}
+
+	// No user in context: return a generic system-level status
+	return map[string]any{
+		"status":         "ok",
+		"security_score": 90.0,
+		"notes":          "authenticated users receive per-account details",
+	}, nil
 }
