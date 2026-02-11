@@ -1,6 +1,22 @@
+### Minimal API tester — health check
+# Update @BASE if your app runs on a different host/port
+@BASE = http://localhost:8080
+
+### Health check
+GET {{BASE}}/api/v1/health
+Accept: application/json
+
+### Simple authenticated ping (replace token)
+#@TOKEN = <paste_access_token_here>
+GET {{BASE}}/api/v1/auth/me
+Authorization: Bearer {{TOKEN}}
+Accept: application/json
+
+### Notes:
+- This file has been pruned to essential checks. Restore or expand as needed.
 # Base URL (edit if needed)
 @BASE = http://localhost:8080
-@TOKEN= eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMmM1MDQwZmMtNzcxZS00NWFiLWFhMmItMWViNDkwYzBlOWYzIiwiZW1haWwiOiJqZDcwMDg5MTFAZ21haWwuY29tIiwiaXNzIjoiYW9nZXJpLWFwaSIsImV4cCI6MTc3MDgwMTI5MCwiaWF0IjoxNzcwODAwMzkwfQ.WL3wHh-aQpOWDZZDtIoR_Z3Vad05RKNIpQGAsab1mY4
+@TOKEN= eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMmM1MDQwZmMtNzcxZS00NWFiLWFhMmItMWViNDkwYzBlOWYzIiwiZW1haWwiOiJqZDcwMDg5MTFAZ21haWwuY29tIiwiaXNzIjoiYW9nZXJpLWFwaSIsImV4cCI6MTc3MDgxNDE4MiwiaWF0IjoxNzcwODEzMjgyfQ.BOzQLdxG3CoFWz8yXw0jBGdLMykFISzULSifxkV36vk
 @REFRESH_TOKEN= d3ff9e0c8fc418bdb9e9ecedbe37a4a7a715d50897963b17133858a0945aaa41
 ### Register a new user
 POST {{BASE}}/api/v1/auth/register
@@ -28,6 +44,14 @@ Content-Type: application/json
 ### Create a stake
 POST {{BASE}}/api/v1/stakes
 Content-Type: application/json
+Authorization: Bearer {{TOKEN}}
+
+{
+    "token_symbol": "AOG",
+    "amount": "10.5",
+    "auto_compound": false,
+    "duration_days": 30
+}
 #########################################
 # Quick API tester (annotated & easy-read)
 # Usage:

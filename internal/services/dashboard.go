@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/jd7008911/aogeri-api/internal/auth"
@@ -27,7 +29,58 @@ func (d *DashboardService) AuthMiddleware(next http.Handler) http.Handler {
 
 // GetStats returns a minimal DashboardStats for now.
 func (d *DashboardService) GetStats(ctx context.Context) (models.DashboardStats, error) {
-	return models.DashboardStats{}, nil
+	var out models.DashboardStats
+
+	// Asset-level metrics (TVL, active tokens, total assets)
+	am, err := d.queries.GetAssetMetrics(ctx)
+	if err != nil {
+		return out, err
+	}
+
+	// Convert TotalTvl (driver returns various types) to string
+	totalTvlStr := "0"
+	switch v := am.TotalTvl.(type) {
+	case nil:
+		totalTvlStr = "0"
+	case float64:
+		totalTvlStr = strconv.FormatFloat(v, 'f', -1, 64)
+	case string:
+		totalTvlStr = v
+	case []byte:
+		totalTvlStr = string(v)
+	default:
+		totalTvlStr = fmt.Sprintf("%v", v)
+	}
+
+	// Total staked value (explicit query)
+	totalStaked, err := d.queries.GetTotalStakedValue(ctx)
+	if err != nil {
+		return out, err
+	}
+	totalStakedStr := "0"
+	if totalStaked.Valid {
+		if fv, err := totalStaked.Float64Value(); err == nil {
+			totalStakedStr = strconv.FormatFloat(fv.Float64, 'f', -1, 64)
+		}
+	}
+
+	// Active governance proposals count
+	props, err := d.queries.GetActiveProposals(ctx)
+	if err != nil {
+		return out, err
+	}
+
+	out = models.DashboardStats{
+		TotalValueLocked:    totalTvlStr,
+		ActiveMonitors:      int32(am.ActiveTokens),
+		RemainingTime:       "N/A",
+		ActiveStakes:        int32(am.TotalAssets),
+		TotalRewards:        totalStakedStr,
+		SecurityScore:       100.0,
+		GovernanceProposals: int32(len(props)),
+	}
+
+	return out, nil
 }
 
 // GetUserOverview returns a minimal overview for now.
