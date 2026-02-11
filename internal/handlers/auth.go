@@ -45,6 +45,7 @@ func (h *AuthHandler) RegisterRoutes(r chi.Router) {
 		r.Group(func(r chi.Router) {
 			r.Use(h.authService.AuthMiddleware)
 			r.Get("/profile", h.GetProfile)
+			r.Get("/me", h.GetProfile)
 			r.Put("/profile", h.UpdateProfile)
 			r.Post("/change-password", h.ChangePassword)
 			r.Post("/enable-2fa", h.Enable2FA)
