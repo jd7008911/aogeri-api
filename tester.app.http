@@ -1,0 +1,127 @@
+# Base URL (edit if needed)
+@BASE = http://localhost:8080
+@TOKEN= eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMmM1MDQwZmMtNzcxZS00NWFiLWFhMmItMWViNDkwYzBlOWYzIiwiZW1haWwiOiJqZDcwMDg5MTFAZ21haWwuY29tIiwiaXNzIjoiYW9nZXJpLWFwaSIsImV4cCI6MTc3MDgwMTI5MCwiaWF0IjoxNzcwODAwMzkwfQ.WL3wHh-aQpOWDZZDtIoR_Z3Vad05RKNIpQGAsab1mY4
+@REFRESH_TOKEN= d3ff9e0c8fc418bdb9e9ecedbe37a4a7a715d50897963b17133858a0945aaa41
+### Register a new user
+POST {{BASE}}/api/v1/register
+Content-Type: application/json
+
+{
+	"email": "jd7008911@gmail.com",
+	"password": "P@$$w0rd1!",
+	"confirm_password": "P@$$w0rd1!",
+	"wallet_address": "0xabcc"
+}
+
+### Login to get access token
+POST {{BASE}}/api/v1/login
+Content-Type: application/json
+
+{
+	"email": "jd7008911@gmail.com",
+	"password": "P@$$w0rd1!"
+}
+
+### Example: use the returned access token for protected endpoints
+# Replace {{TOKEN}} with the `access_token` value returned by /login
+
+### Create a stake
+POST {{BASE}}/api/v1/stakes
+Content-Type: application/json
+#########################################
+# Quick API tester (annotated & easy-read)
+# Usage:
+# 1) Run the Register request to create a user (or skip if already created).
+# 2) Run Login to get `access_token` and `refresh_token`.
+# 3) Replace {{TOKEN}} and {{REFRESH_TOKEN}} below with the returned values
+#    (or use your HTTP client's environment/variable feature).
+#########################################
+
+
+### 1) Register (create a user)
+POST {{BASE}}/api/v1/register
+Content-Type: application/json
+
+{
+	"email": "jd7008911@gmail.com",
+	"password": "P@$$w0rd1!",
+	"confirm_password": "P@$$w0rd1!",
+	"wallet_address": "0xabcc"
+}
+
+### 2) Login (returns access_token + refresh_token)
+POST {{BASE}}/api/v1/login
+Content-Type: application/json
+
+{
+	"email": "jd7008911@gmail.com",
+	"password": "P@$$w0rd1!"
+}
+
+# Example: extract token with `jq` (bash)
+# TOKEN=$(curl -s -X POST {{BASE}}/api/v1/login -H 'Content-Type: application/json' -d '{"email":"jd7008911@gmail.com","password":"P@$$w0rd1!"}' | jq -r '.access_token')
+# REFRESH=$(curl -s -X POST {{BASE}}/api/v1/login -H 'Content-Type: application/json' -d '{"email":"jd7008911@gmail.com","password":"P@$$w0rd1!"}' | jq -r '.refresh_token')
+
+### 3) Create a stake (authenticated)
+POST {{BASE}}/api/v1/stakes
+Content-Type: application/json
+Authorization: Bearer {{TOKEN}}
+
+{
+	"token_symbol": "AOG",
+	"amount": "10.5",
+	"auto_compound": false,
+	"duration_days": 30
+}
+
+### 4) List current user's stakes
+GET {{BASE}}/api/v1/stakes
+Authorization: Bearer {{TOKEN}}
+
+### 5) Get a single stake (replace {id} with stake id)
+GET {{BASE}}/api/v1/stakes/{id}
+Authorization: Bearer {{TOKEN}}
+
+### 6) Unstake (replace {id})
+POST {{BASE}}/api/v1/stakes/{id}/unstake
+Authorization: Bearer {{TOKEN}}
+
+### 7) Claim rewards (placeholder)
+POST {{BASE}}/api/v1/stakes/{id}/claim
+Authorization: Bearer {{TOKEN}}
+
+### Dashboard endpoints (authenticated)
+GET {{BASE}}/api/v1/dashboard/stats
+Authorization: Bearer {{TOKEN}}
+
+### Dashboard overview
+GET {{BASE}}/api/v1/dashboard/overview
+Authorization: Bearer {{TOKEN}}
+
+### Security dashboard
+GET {{BASE}}/api/v1/dashboard/security
+Authorization: Bearer {{TOKEN}}
+
+### Public assets list
+GET {{BASE}}/api/v1/assets
+Authorization: Bearer {{TOKEN}}
+
+### Governance proposals
+GET {{BASE}}/api/v1/proposals
+Authorization: Bearer {{TOKEN}}
+
+### Refresh token
+POST {{BASE}}/api/v1/refresh
+Content-Type: application/json
+
+{
+	"refresh_token": "{{REFRESH_TOKEN}}"
+}
+
+### Logout (invalidate refresh token)
+POST {{BASE}}/api/v1/logout
+Content-Type: application/json
+
+{
+	"refresh_token": "{{REFRESH_TOKEN}}"
+}
