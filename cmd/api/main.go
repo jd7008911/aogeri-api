@@ -62,13 +62,14 @@ func main() {
 	stakingService := services.NewStakingService(database.Queries, authService)
 	dashboardService := services.NewDashboardService(database.Queries, authService)
 	governanceService := services.NewGovernanceService(database.Queries, authService)
+	assetsService := services.NewAssetsService(database.Queries)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService, database.Queries)
 	stakeHandler := handlers.NewStakeHandler(database.Queries, stakingService, authService)
 	dashboardHandler := handlers.NewDashboardHandler(dashboardService)
 	governanceHandler := handlers.NewGovernanceHandler(database.Queries, governanceService)
-	assetHandler := handlers.NewAssetsHandler()
+	assetHandler := handlers.NewAssetsHandler(assetsService)
 
 	// Setup router
 	r := chi.NewRouter()
