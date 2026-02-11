@@ -14,12 +14,20 @@ import (
 	"github.com/jd7008911/aogeri-api/internal/models"
 )
 
+type stakingQuerier interface {
+	GetTokenList(ctx context.Context) ([]db.GetTokenListRow, error)
+	CreateStake(ctx context.Context, arg db.CreateStakeParams) (db.Stake, error)
+	GetStakeByID(ctx context.Context, id pgtype.UUID) (db.GetStakeByIDRow, error)
+	GetUserStakes(ctx context.Context, userID pgtype.UUID) ([]db.GetUserStakesRow, error)
+	Unstake(ctx context.Context, arg db.UnstakeParams) error
+}
+
 type StakingService struct {
-	queries *db.Queries
+	queries stakingQuerier
 	auth    *auth.AuthService
 }
 
-func NewStakingService(queries *db.Queries, auth *auth.AuthService) *StakingService {
+func NewStakingService(queries stakingQuerier, auth *auth.AuthService) *StakingService {
 	return &StakingService{
 		queries: queries,
 		auth:    auth,
